@@ -416,6 +416,37 @@ body {
         animate();
     }
 
+    function handleStart(e) {
+        e.preventDefault();
+        currentlyPressedKeys[37] = 1;
+    }
+
+    function handleEnd(e) {
+        e.preventDefault();
+        currentlyPressedKeys[37] = 0;
+    }
+
+    function handleCancel(e) {
+        e.preventDefault();
+    }
+
+    function handleLeave(e) {
+        e.preventDefault();
+    }
+
+    function handleMove(e) {
+        e.preventDefault();
+    }
+
+    function addEventListeners() {
+        var canvas = document.getElementById("tank");
+        canvas.addEventListener("touchstart", handleStart, false);
+        canvas.addEventListener("touchend", handleEnd, false);
+        canvas.addEventListener("touchcancel", handleCancel, false);
+        canvas.addEventListener("touchleave", handleLeave, false);
+        canvas.addEventListener("touchmove", handleMove, false);
+    }
+
     function webglResize() {
         var canvas = document.getElementById("tank");
         if (canvas.width < window.innerWidth) {
@@ -440,6 +471,8 @@ body {
 
         document.onkeydown = handleKeyDown;
         document.onkeyup = handleKeyUp;
+
+      	addEventListeners();
 
         tick();
     }
