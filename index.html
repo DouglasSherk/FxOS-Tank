@@ -200,11 +200,11 @@ body {
         return degrees * Math.PI / 180;
     }
 
-    var gMapSize = 5.0;
-    var gWorldSize = gMapSize * 10.0;
+    const MAP_SIZE = 5.0;
+    const WORLD_SIZE = MAP_SIZE * 10.0;
 
-    var xPos = 0.0;
-    var yPos = -5.0;
+    var gXPos = 0.0;
+    var gYPos = -5.0;
 
     var z = -2.0;
 
@@ -266,10 +266,10 @@ body {
         gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexPositionBuffer);
         vertices = [
             // Bottom face
-            -gMapSize, 0.0, -gMapSize,
-             gMapSize, 0.0, -gMapSize,
-             gMapSize, 0.0,  gMapSize,
-            -gMapSize, 0.0,  gMapSize,
+            -MAP_SIZE, 0.0, -MAP_SIZE,
+             MAP_SIZE, 0.0, -MAP_SIZE,
+             MAP_SIZE, 0.0,  MAP_SIZE,
+            -MAP_SIZE, 0.0,  MAP_SIZE,
         ];
         gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
         grassVertexPositionBuffer.itemSize = 3;
@@ -308,7 +308,7 @@ body {
         mat4.identity(mvMatrix);
 
         mat4.rotate(mvMatrix, degToRad(25.0), [1, 0, 0]);
-        mat4.translate(mvMatrix, [xPos, z, yPos]);
+        mat4.translate(mvMatrix, [gXPos, z, gYPos]);
 
         gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexPositionBuffer);
         gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, grassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
@@ -389,8 +389,8 @@ body {
         for (var i = 0; i < touches.length; i++) {
             var touch = touches[i];
             var touchId = getTouchIdByIdentifier(touches[i].identifier);
-            xPos += (touch.screenX - gTouches[touchId].screenX) / 100.0;
-            yPos += (touch.screenY - gTouches[touchId].screenY) / 100.0;
+            gXPos += (touch.screenX - gTouches[touchId].screenX) / 100.0;
+            gYPos += (touch.screenY - gTouches[touchId].screenY) / 100.0;
             gTouches[touchId] = touch;
         }
     }
