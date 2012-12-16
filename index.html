@@ -68,6 +68,16 @@ body {
   var gGrassVertexTextureCoordBuffer;
   var gGrassVertexIndexBuffer;
 
+  var gGrassTextures = Array();
+
+  var gMVMatrix = mat4.create();
+  var gMVMatrixStack = [];
+  var gPMatrix = mat4.create();
+
+  var gLastTime = 0;
+
+  var gTouches = [];
+
   function initGL(canvas) {
     try {
       gl = canvas.getContext("experimental-webgl");
@@ -163,43 +173,37 @@ body {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
-  var grassTextures = Array();
-
   function initTexture() {
     var grassImage = new Image();
 
     for (var i=0; i < 3; i++) {
       var texture = gl.createTexture();
       texture.image = grassImage;
-      grassTextures.push(texture);
+      gGrassTextures.push(texture);
     }
 
     grassImage.onload = function () {
-      handleLoadedTexture(grassTextures)
+      handleLoadedTexture(gGrassTextures)
     }
     grassImage.src = "grass.gif";
   }
 
-  var mvMatrix = mat4.create();
-  var mvMatrixStack = [];
-  var pMatrix = mat4.create();
-
   function mvPushMatrix() {
     var copy = mat4.create();
-    mat4.set(mvMatrix, copy);
-    mvMatrixStack.push(copy);
+    mat4.set(gMVMatrix, copy);
+    gMVMatrixStack.push(copy);
   }
 
   function mvPopMatrix() {
-    if (mvMatrixStack.length == 0) {
+    if (gMVMatrixStack.length == 0) {
       throw "Invalid popMatrix!";
     }
-    mvMatrix = mvMatrixStack.pop();
+    gMVMatrix = gMVMatrixStack.pop();
   }
 
   function setMatrixUniforms() {
-    gl.uniformMatrix4fv(gShaderProgram.pMatrixUniform, false, pMatrix);
-    gl.uniformMatrix4fv(gShaderProgram.mvMatrixUniform, false, mvMatrix);
+    gl.uniformMatrix4fv(gShaderProgram.pMatrixUniform, false, gPMatrix);
+    gl.uniformMatrix4fv(gShaderProgram.mvMatrixUniform, false, gMVMatrix);
   }
 
   function degToRad(degrees) {
@@ -287,12 +291,12 @@ body {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, gPMatrix);
 
-    mat4.identity(mvMatrix);
+    mat4.identity(gMVMatrix);
 
-    mat4.rotate(mvMatrix, degToRad(25.0), [1, 0, 0]);
-    mat4.translate(mvMatrix, [gXPos, Z_POS, gYPos]);
+    mat4.rotate(gMVMatrix, degToRad(25.0), [1, 0, 0]);
+    mat4.translate(gMVMatrix, [gXPos, Z_POS, gYPos]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
     gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
@@ -301,7 +305,7 @@ body {
     gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gGrassVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, grassTextures[gTextureFilter]);
+    gl.bindTexture(gl.TEXTURE_2D, gGrassTextures[gTextureFilter]);
     gl.uniform1i(gShaderProgram.samplerUniform, 0);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
@@ -309,20 +313,16 @@ body {
     gl.drawElements(gl.TRIANGLES, gGrassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
   }
 
-
-  var lastTime = 0;
-
   function animate() {
     var timeNow = new Date().getTime();
-    if (lastTime != 0) {
-      var elapsed = timeNow - lastTime;
+    if (gLastTime != 0) {
+      var elapsed = timeNow - gLastTime;
 
       xRot += (xSpeed * elapsed) / 1000.0;
       yRot += (ySpeed * elapsed) / 1000.0;
     }
-    lastTime = timeNow;
+    gLastTime = timeNow;
   }
-
 
   function tick() {
     requestAnimFrame(tick);
@@ -330,8 +330,6 @@ body {
     drawScene();
     animate();
   }
-
-  var gTouches = [];
 
   function getTouchIdByIdentifier(id) {
     for (var i = 0; i < gTouches.length; i++) {
