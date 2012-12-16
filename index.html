@@ -54,6 +54,8 @@ body {
   const MAP_SIZE = 50.0;
   const WORLD_SIZE = MAP_SIZE * 100.0;
 
+  const FLING_FRICTION = 250.0;
+
   var gXPos = 0.0;
   var gYPos = -MAP_SIZE;
   var gZPos = -10.0;
@@ -326,13 +328,15 @@ body {
         gYPos += MAP_SIZE * (gYSpeed * elapsed) / 1000.0;
 
         if (elapsed > 0) {
-          gXSpeed *= 10.0/elapsed;
-          gYSpeed *= 10.0/elapsed;
-
-          if (gXSpeed < 0.01) {
+          if (Math.abs(gXSpeed) > 0.1) {
+            gXSpeed += (gXSpeed > 0.0 ? -1 : 1) * elapsed / FLING_FRICTION;
+          } else {
             gXSpeed = 0.0;
           }
-          if (gYSpeed < 0.01) {
+
+          if (Math.abs(gYSpeed) > 0.1) {
+            gYSpeed += (gYSpeed > 0.0 ? -1 : 1) * elapsed / FLING_FRICTION;
+          } else {
             gYSpeed = 0.0;
           }
         }
