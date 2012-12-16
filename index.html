@@ -51,12 +51,12 @@ body {
 
   var gl;
 
-  const MAP_SIZE = 5.0;
-  const WORLD_SIZE = MAP_SIZE * 10.0;
-  const Z_POS = -2.0;
+  const MAP_SIZE = 50.0;
+  const WORLD_SIZE = MAP_SIZE * 100.0;
+  const Z_POS = -10.0;
 
   var gXPos = 0.0;
-  var gYPos = -5.0;
+  var gYPos = -MAP_SIZE;
 
   var gTextureFilter = 2;
 
@@ -291,7 +291,7 @@ body {
     gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
     gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, gPMatrix);
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 10000.0, gPMatrix);
 
     mat4.identity(gMVMatrix);
 
@@ -318,8 +318,8 @@ body {
     if (gLastTime != 0) {
       var elapsed = timeNow - gLastTime;
 
-      xRot += (xSpeed * elapsed) / 1000.0;
-      yRot += (ySpeed * elapsed) / 1000.0;
+      //xRot += (xSpeed * elapsed) / 1000.0;
+      //yRot += (ySpeed * elapsed) / 1000.0;
     }
     gLastTime = timeNow;
   }
@@ -371,8 +371,8 @@ body {
     for (var i = 0; i < touches.length; i++) {
       var touch = touches[i];
       var touchId = getTouchIdByIdentifier(touches[i].identifier);
-      gXPos += (touch.screenX - gTouches[touchId].screenX) / 100.0;
-      gYPos += (touch.screenY - gTouches[touchId].screenY) / 100.0;
+      gXPos += MAP_SIZE * (touch.screenX - gTouches[touchId].screenX) / 1000.0;
+      gYPos += MAP_SIZE * (touch.screenY - gTouches[touchId].screenY) / 1000.0;
       gTouches[touchId] = touch;
     }
   }
