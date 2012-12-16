@@ -58,6 +58,9 @@ body {
   var gYPos = -MAP_SIZE;
   var gZPos = -10.0;
 
+  var gXSpeed = 0.0;
+  var gYSpeed = 0.0;
+
   var gTextureFilter = 2;
 
   var gPressedKeys = {};
@@ -318,8 +321,22 @@ body {
     if (gLastTime != 0) {
       var elapsed = timeNow - gLastTime;
 
-      //xRot += (xSpeed * elapsed) / 1000.0;
-      //yRot += (ySpeed * elapsed) / 1000.0;
+      if (gTouches.length == 0) {
+        gXPos += MAP_SIZE * (gXSpeed * elapsed) / 1000.0;
+        gYPos += MAP_SIZE * (gYSpeed * elapsed) / 1000.0;
+
+        if (elapsed > 0) {
+          gXSpeed *= 10.0/elapsed;
+          gYSpeed *= 10.0/elapsed;
+
+          if (gXSpeed < 0.01) {
+            gXSpeed = 0.0;
+          }
+          if (gYSpeed < 0.01) {
+            gYSpeed = 0.0;
+          }
+        }
+      }
     }
     gLastTime = timeNow;
   }
@@ -381,8 +398,10 @@ body {
 
     if (gTouches.length == 1) {
       var touch = gTouches[0];
-      gXPos += MAP_SIZE * (touch.screenX - touch.lastScreenX) / 1000.0;
-      gYPos += MAP_SIZE * (touch.screenY - touch.lastScreenY) / 1000.0;
+      gXSpeed = MAP_SIZE * (touch.screenX - touch.lastScreenX) / 1000.0;
+      gYSpeed = MAP_SIZE * (touch.screenY - touch.lastScreenY) / 1000.0;
+      gXPos += gXSpeed;
+      gYPos += gYSpeed;
     } else if (gTouches.length >= 2) {
       var firstTouch = gTouches[0];
       var lastTouch = gTouches[gTouches.length - 1];
