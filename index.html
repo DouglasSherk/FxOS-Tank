@@ -41,403 +41,389 @@ body {
 
     varying vec2 vTextureCoord;
 
-
     void main(void) {
         gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
         vTextureCoord = aTextureCoord;
     }
 </script>
 
-
 <script type="text/javascript">
 
-    var gl;
+  var gl;
 
-    const MAP_SIZE = 5.0;
-    const WORLD_SIZE = MAP_SIZE * 10.0;
-    const Z_POS = -2.0;
+  const MAP_SIZE = 5.0;
+  const WORLD_SIZE = MAP_SIZE * 10.0;
+  const Z_POS = -2.0;
 
-    var gXPos = 0.0;
-    var gYPos = -5.0;
+  var gXPos = 0.0;
+  var gYPos = -5.0;
 
-    var gTextureFilter = 0;
+  var gTextureFilter = 2;
 
-    var gPressedKeys = {};
+  var gPressedKeys = {};
 
-    function initGL(canvas) {
-        try {
-            gl = canvas.getContext("experimental-webgl");
-            gl.viewportWidth = canvas.width;
-            gl.viewportHeight = canvas.height;
-        } catch (e) {
-        }
-        if (!gl) {
-            alert("Could not initialise WebGL, sorry :-(");
-        }
+  var gShaderProgram;
+
+  var gGrassVertexPositionBuffer;
+  var gGrassVertexTextureCoordBuffer;
+  var gGrassVertexIndexBuffer;
+
+  function initGL(canvas) {
+    try {
+      gl = canvas.getContext("experimental-webgl");
+      gl.viewportWidth = canvas.width;
+      gl.viewportHeight = canvas.height;
+    } catch (e) {
+    }
+    if (!gl) {
+      alert("Could not initialise WebGL, sorry :-(");
+    }
+  }
+
+  function getShader(gl, id) {
+    var shaderScript = document.getElementById(id);
+    if (!shaderScript) {
+      return null;
     }
 
-
-    function getShader(gl, id) {
-        var shaderScript = document.getElementById(id);
-        if (!shaderScript) {
-            return null;
-        }
-
-        var str = "";
-        var k = shaderScript.firstChild;
-        while (k) {
-            if (k.nodeType == 3) {
-                str += k.textContent;
-            }
-            k = k.nextSibling;
-        }
-
-        var shader;
-        if (shaderScript.type == "x-shader/x-fragment") {
-            shader = gl.createShader(gl.FRAGMENT_SHADER);
-        } else if (shaderScript.type == "x-shader/x-vertex") {
-            shader = gl.createShader(gl.VERTEX_SHADER);
-        } else {
-            return null;
-        }
-
-        gl.shaderSource(shader, str);
-        gl.compileShader(shader);
-
-        if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-            alert(gl.getShaderInfoLog(shader));
-            return null;
-        }
-
-        return shader;
+    var str = "";
+    var k = shaderScript.firstChild;
+    while (k) {
+      if (k.nodeType == 3) {
+        str += k.textContent;
+      }
+      k = k.nextSibling;
     }
 
-
-    var shaderProgram;
-
-    function initShaders() {
-        var fragmentShader = getShader(gl, "shader-fs");
-        var vertexShader = getShader(gl, "shader-vs");
-
-        shaderProgram = gl.createProgram();
-        gl.attachShader(shaderProgram, vertexShader);
-        gl.attachShader(shaderProgram, fragmentShader);
-        gl.linkProgram(shaderProgram);
-
-        if (!gl.getProgramParameter(shaderProgram, gl.LINK_STATUS)) {
-            alert("Could not initialise shaders");
-        }
-
-        gl.useProgram(shaderProgram);
-
-        shaderProgram.vertexPositionAttribute = gl.getAttribLocation(shaderProgram, "aVertexPosition");
-        gl.enableVertexAttribArray(shaderProgram.vertexPositionAttribute);
-
-        shaderProgram.textureCoordAttribute = gl.getAttribLocation(shaderProgram, "aTextureCoord");
-        gl.enableVertexAttribArray(shaderProgram.textureCoordAttribute);
-
-        shaderProgram.pMatrixUniform = gl.getUniformLocation(shaderProgram, "uPMatrix");
-        shaderProgram.mvMatrixUniform = gl.getUniformLocation(shaderProgram, "uMVMatrix");
-        shaderProgram.samplerUniform = gl.getUniformLocation(shaderProgram, "uSampler");
+    var shader;
+    if (shaderScript.type == "x-shader/x-fragment") {
+      shader = gl.createShader(gl.FRAGMENT_SHADER);
+    } else if (shaderScript.type == "x-shader/x-vertex") {
+      shader = gl.createShader(gl.VERTEX_SHADER);
+    } else {
+      return null;
     }
 
+    gl.shaderSource(shader, str);
+    gl.compileShader(shader);
 
-    function handleLoadedTexture(textures) {
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-
-        gl.bindTexture(gl.TEXTURE_2D, textures[0]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[0].image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-
-        gl.bindTexture(gl.TEXTURE_2D, textures[1]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[1].image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-        gl.bindTexture(gl.TEXTURE_2D, textures[2]);
-        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[2].image);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
-        gl.generateMipmap(gl.TEXTURE_2D);
-
-        gl.bindTexture(gl.TEXTURE_2D, null);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      alert(gl.getShaderInfoLog(shader));
+      return null;
     }
 
+    return shader;
+  }
 
-    var grassTextures = Array();
+  function initShaders() {
+    var fragmentShader = getShader(gl, "shader-fs");
+    var vertexShader = getShader(gl, "shader-vs");
 
-    function initTexture() {
-        var grassImage = new Image();
+    gShaderProgram = gl.createProgram();
+    gl.attachShader(gShaderProgram, vertexShader);
+    gl.attachShader(gShaderProgram, fragmentShader);
+    gl.linkProgram(gShaderProgram);
 
-        for (var i=0; i < 3; i++) {
-            var texture = gl.createTexture();
-            texture.image = grassImage;
-            grassTextures.push(texture);
-        }
-
-        grassImage.onload = function () {
-            handleLoadedTexture(grassTextures)
-        }
-        grassImage.src = "grass.gif";
+    if (!gl.getProgramParameter(gShaderProgram, gl.LINK_STATUS)) {
+      alert("Could not initialise shaders");
     }
 
+    gl.useProgram(gShaderProgram);
 
-    var mvMatrix = mat4.create();
-    var mvMatrixStack = [];
-    var pMatrix = mat4.create();
+    gShaderProgram.vertexPositionAttribute = gl.getAttribLocation(gShaderProgram, "aVertexPosition");
+    gl.enableVertexAttribArray(gShaderProgram.vertexPositionAttribute);
 
-    function mvPushMatrix() {
-        var copy = mat4.create();
-        mat4.set(mvMatrix, copy);
-        mvMatrixStack.push(copy);
+    gShaderProgram.textureCoordAttribute = gl.getAttribLocation(gShaderProgram, "aTextureCoord");
+    gl.enableVertexAttribArray(gShaderProgram.textureCoordAttribute);
+
+    gShaderProgram.pMatrixUniform = gl.getUniformLocation(gShaderProgram, "uPMatrix");
+    gShaderProgram.mvMatrixUniform = gl.getUniformLocation(gShaderProgram, "uMVMatrix");
+    gShaderProgram.samplerUniform = gl.getUniformLocation(gShaderProgram, "uSampler");
+  }
+
+  function handleLoadedTexture(textures) {
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+    gl.bindTexture(gl.TEXTURE_2D, textures[0]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[0].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+
+    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[1].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+
+    gl.bindTexture(gl.TEXTURE_2D, textures[2]);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[2].image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+    gl.generateMipmap(gl.TEXTURE_2D);
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  var grassTextures = Array();
+
+  function initTexture() {
+    var grassImage = new Image();
+
+    for (var i=0; i < 3; i++) {
+      var texture = gl.createTexture();
+      texture.image = grassImage;
+      grassTextures.push(texture);
     }
 
-    function mvPopMatrix() {
-        if (mvMatrixStack.length == 0) {
-            throw "Invalid popMatrix!";
-        }
-        mvMatrix = mvMatrixStack.pop();
+    grassImage.onload = function () {
+      handleLoadedTexture(grassTextures)
     }
+    grassImage.src = "grass.gif";
+  }
 
+  var mvMatrix = mat4.create();
+  var mvMatrixStack = [];
+  var pMatrix = mat4.create();
 
-    function setMatrixUniforms() {
-        gl.uniformMatrix4fv(shaderProgram.pMatrixUniform, false, pMatrix);
-        gl.uniformMatrix4fv(shaderProgram.mvMatrixUniform, false, mvMatrix);
+  function mvPushMatrix() {
+    var copy = mat4.create();
+    mat4.set(mvMatrix, copy);
+    mvMatrixStack.push(copy);
+  }
+
+  function mvPopMatrix() {
+    if (mvMatrixStack.length == 0) {
+      throw "Invalid popMatrix!";
     }
+    mvMatrix = mvMatrixStack.pop();
+  }
 
+  function setMatrixUniforms() {
+    gl.uniformMatrix4fv(gShaderProgram.pMatrixUniform, false, pMatrix);
+    gl.uniformMatrix4fv(gShaderProgram.mvMatrixUniform, false, mvMatrix);
+  }
 
-    function degToRad(degrees) {
-        return degrees * Math.PI / 180;
+  function degToRad(degrees) {
+    return degrees * Math.PI / 180;
+  }
+
+  function handleKeyDown(event) {
+    gPressedKeys[event.keyCode] = true;
+
+    if (String.fromCharCode(event.keyCode) == "F") {
+      gTextureFilter += 1;
+      if (gTextureFilter == 3) {
+        gTextureFilter = 0;
+      }
     }
+  }
 
-    function handleKeyDown(event) {
-        gPressedKeys[event.keyCode] = true;
+  function handleKeyUp(event) {
+    gPressedKeys[event.keyCode] = false;
+  }
 
-        if (String.fromCharCode(event.keyCode) == "F") {
-            gTextureFilter += 1;
-            if (gTextureFilter == 3) {
-                gTextureFilter = 0;
-            }
-        }
+  function handleKeys() {
+    if (gPressedKeys[33]) {
+      // Page Up
     }
-
-
-    function handleKeyUp(event) {
-        gPressedKeys[event.keyCode] = false;
+    if (gPressedKeys[34]) {
+      // Page Down
     }
-
-
-    function handleKeys() {
-        if (gPressedKeys[33]) {
-            // Page Up
-        }
-        if (gPressedKeys[34]) {
-            // Page Down
-        }
-        if (gPressedKeys[37]) {
-            // Left cursor key
-            ySpeed -= 1;
-        }
-        if (gPressedKeys[39]) {
-            // Right cursor key
-            ySpeed += 1;
-        }
-        if (gPressedKeys[38]) {
-            // Up cursor key
-            xSpeed -= 1;
-        }
-        if (gPressedKeys[40]) {
-            // Down cursor key
-            xSpeed += 1;
-        }
+    if (gPressedKeys[37]) {
+      // Left cursor key
+      ySpeed -= 1;
     }
-
-
-    var grassVertexPositionBuffer;
-    var grassVertexTextureCoordBuffer;
-    var grassVertexIndexBuffer;
-    function initBuffers() {
-        grassVertexPositionBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexPositionBuffer);
-        vertices = [
-            // Bottom face
-            -MAP_SIZE, 0.0, -MAP_SIZE,
-             MAP_SIZE, 0.0, -MAP_SIZE,
-             MAP_SIZE, 0.0,  MAP_SIZE,
-            -MAP_SIZE, 0.0,  MAP_SIZE,
-        ];
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-        grassVertexPositionBuffer.itemSize = 3;
-        grassVertexPositionBuffer.numItems = 4;
-
-        grassVertexTextureCoordBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexTextureCoordBuffer);
-        var textureCoords = [
-            // Bottom face
-            1.0, 1.0,
-            0.0, 1.0,
-            0.0, 0.0,
-            1.0, 0.0,
-        ];
-        gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
-        grassVertexTextureCoordBuffer.itemSize = 2;
-        grassVertexTextureCoordBuffer.numItems = 4;
-
-        grassVertexIndexBuffer = gl.createBuffer();
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, grassVertexIndexBuffer);
-        var grassVertexIndices = [
-            0, 1, 2,      0, 2, 3,    // Bottom face
-        ]
-        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(grassVertexIndices), gl.STATIC_DRAW);
-        grassVertexIndexBuffer.itemSize = 1;
-        grassVertexIndexBuffer.numItems = 6;
+    if (gPressedKeys[39]) {
+      // Right cursor key
+      ySpeed += 1;
     }
-
-
-    function drawScene() {
-        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
-
-        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
-
-        mat4.identity(mvMatrix);
-
-        mat4.rotate(mvMatrix, degToRad(25.0), [1, 0, 0]);
-        mat4.translate(mvMatrix, [gXPos, Z_POS, gYPos]);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexPositionBuffer);
-        gl.vertexAttribPointer(shaderProgram.vertexPositionAttribute, grassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        gl.bindBuffer(gl.ARRAY_BUFFER, grassVertexTextureCoordBuffer);
-        gl.vertexAttribPointer(shaderProgram.textureCoordAttribute, grassVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, grassTextures[gTextureFilter]);
-        gl.uniform1i(shaderProgram.samplerUniform, 0);
-
-        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, grassVertexIndexBuffer);
-        setMatrixUniforms();
-        gl.drawElements(gl.TRIANGLES, grassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+    if (gPressedKeys[38]) {
+      // Up cursor key
+      xSpeed -= 1;
     }
-
-
-    var lastTime = 0;
-
-    function animate() {
-        var timeNow = new Date().getTime();
-        if (lastTime != 0) {
-            var elapsed = timeNow - lastTime;
-
-            xRot += (xSpeed * elapsed) / 1000.0;
-            yRot += (ySpeed * elapsed) / 1000.0;
-        }
-        lastTime = timeNow;
+    if (gPressedKeys[40]) {
+      // Down cursor key
+      xSpeed += 1;
     }
+  }
+
+  function initBuffers() {
+    gGrassVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
+    vertices = [
+      // Bottom face
+      -MAP_SIZE, 0.0, -MAP_SIZE,
+      MAP_SIZE, 0.0, -MAP_SIZE,
+      MAP_SIZE, 0.0,  MAP_SIZE,
+      -MAP_SIZE, 0.0,  MAP_SIZE,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gGrassVertexPositionBuffer.itemSize = 3;
+    gGrassVertexPositionBuffer.numItems = 4;
+
+    gGrassVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexTextureCoordBuffer);
+    var textureCoords = [
+      // Bottom face
+      1.0, 1.0,
+      0.0, 1.0,
+      0.0, 0.0,
+      1.0, 0.0,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+    gGrassVertexTextureCoordBuffer.itemSize = 2;
+    gGrassVertexTextureCoordBuffer.numItems = 4;
+
+    gGrassVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
+    var gGrassVertexIndices = [
+      0, 1, 2,      0, 2, 3,    // Bottom face
+    ];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(gGrassVertexIndices), gl.STATIC_DRAW);
+    gGrassVertexIndexBuffer.itemSize = 1;
+    gGrassVertexIndexBuffer.numItems = 6;
+  }
+
+  function drawScene() {
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 100.0, pMatrix);
+
+    mat4.identity(mvMatrix);
+
+    mat4.rotate(mvMatrix, degToRad(25.0), [1, 0, 0]);
+    mat4.translate(mvMatrix, [gXPos, Z_POS, gYPos]);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
+    gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gGrassVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, grassTextures[gTextureFilter]);
+    gl.uniform1i(gShaderProgram.samplerUniform, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
+    setMatrixUniforms();
+    gl.drawElements(gl.TRIANGLES, gGrassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+  }
 
 
-    function tick() {
-        requestAnimFrame(tick);
-        handleKeys();
-        drawScene();
-        animate();
+  var lastTime = 0;
+
+  function animate() {
+    var timeNow = new Date().getTime();
+    if (lastTime != 0) {
+      var elapsed = timeNow - lastTime;
+
+      xRot += (xSpeed * elapsed) / 1000.0;
+      yRot += (ySpeed * elapsed) / 1000.0;
     }
+    lastTime = timeNow;
+  }
 
-    var gTouches = [];
 
-    function getTouchIdByIdentifier(id) {
-        for (var i = 0; i < gTouches.length; i++) {
-            if (gTouches[i].identifier == id) {
-                return i;
-            }
-        }
-        return -1;
+  function tick() {
+    requestAnimFrame(tick);
+    handleKeys();
+    drawScene();
+    animate();
+  }
+
+  var gTouches = [];
+
+  function getTouchIdByIdentifier(id) {
+    for (var i = 0; i < gTouches.length; i++) {
+      if (gTouches[i].identifier == id) {
+        return i;
+      }
     }
+    return -1;
+  }
 
-    function handleStart(e) {
-        e.preventDefault();
-        var touches = e.changedTouches;
-        for (var i = 0; i < touches.length; i++) {
-            gTouches.push(touches[i]);
-        }
+  function handleStart(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      gTouches.push(touches[i]);
     }
+  }
 
-    function handleEnd(e) {
-        e.preventDefault();
-        var touches = e.changedTouches;
-        for (var i = 0; i < touches.length; i++) {
-            var touchId = getTouchIdByIdentifier(touches[i].identifier);
-            gTouches.splice(touchId, 1);
-        }
+  function handleEnd(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      var touchId = getTouchIdByIdentifier(touches[i].identifier);
+      gTouches.splice(touchId, 1);
     }
+  }
 
-    function handleCancel(e) {
-        handleEnd(e);
+  function handleCancel(e) {
+    handleEnd(e);
+  }
+
+  function handleLeave(e) {
+    handleEnd(e);
+  }
+
+  function handleMove(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      var touch = touches[i];
+      var touchId = getTouchIdByIdentifier(touches[i].identifier);
+      gXPos += (touch.screenX - gTouches[touchId].screenX) / 100.0;
+      gYPos += (touch.screenY - gTouches[touchId].screenY) / 100.0;
+      gTouches[touchId] = touch;
     }
+  }
 
-    function handleLeave(e) {
-        handleEnd(e);
+  function addEventListeners() {
+    var canvas = document.getElementById("tank");
+    canvas.addEventListener("touchstart", handleStart, false);
+    canvas.addEventListener("touchend", handleEnd, false);
+    canvas.addEventListener("touchcancel", handleCancel, false);
+    canvas.addEventListener("touchleave", handleLeave, false);
+    canvas.addEventListener("touchmove", handleMove, false);
+  }
+
+  function webglResize() {
+    var canvas = document.getElementById("tank");
+    if (canvas.width < window.innerWidth) {
+      canvas.width = window.innerWidth;
     }
-
-    function handleMove(e) {
-        e.preventDefault();
-        var touches = e.changedTouches;
-        for (var i = 0; i < touches.length; i++) {
-            var touch = touches[i];
-            var touchId = getTouchIdByIdentifier(touches[i].identifier);
-            gXPos += (touch.screenX - gTouches[touchId].screenX) / 100.0;
-            gYPos += (touch.screenY - gTouches[touchId].screenY) / 100.0;
-            gTouches[touchId] = touch;
-        }
+    if (canvas.height < window.innerHeight) {
+      canvas.height = window.innerHeight;
     }
+  }
 
-    function addEventListeners() {
-        var canvas = document.getElementById("tank");
-        canvas.addEventListener("touchstart", handleStart, false);
-        canvas.addEventListener("touchend", handleEnd, false);
-        canvas.addEventListener("touchcancel", handleCancel, false);
-        canvas.addEventListener("touchleave", handleLeave, false);
-        canvas.addEventListener("touchmove", handleMove, false);
-    }
+  function webGLStart() {
+    webglResize();
 
-    function webglResize() {
-        var canvas = document.getElementById("tank");
-        if (canvas.width < window.innerWidth) {
-            canvas.width = window.innerWidth;
-        }
-        if (canvas.height < window.innerHeight) {
-            canvas.height = window.innerHeight;
-        }
-    }
+    var canvas = document.getElementById("tank");
+    initGL(canvas);
+    initShaders();
+    initBuffers();
+    initTexture();
 
-    function webGLStart() {
-        webglResize();
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.DEPTH_TEST);
 
-        var canvas = document.getElementById("tank");
-        initGL(canvas);
-        initShaders();
-        initBuffers();
-        initTexture();
+    document.onkeydown = handleKeyDown;
+    document.onkeyup = handleKeyUp;
 
-        gl.clearColor(0.0, 0.0, 0.0, 1.0);
-        gl.enable(gl.DEPTH_TEST);
+    addEventListeners();
 
-        document.onkeydown = handleKeyDown;
-        document.onkeyup = handleKeyUp;
-
-      	addEventListeners();
-
-        tick();
-    }
+    tick();
+  }
 
 </script>
 
-
 </head>
 
-
 <body onload="webGLStart();" onresize="webglResize();">
-    <canvas id="tank" style="border: none;" width="300" height="300"></canvas>
+  <canvas id="tank" style="border: none;" width="300" height="300"></canvas>
 </body>
 
 </html>
