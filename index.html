@@ -53,10 +53,10 @@ body {
 
   const MAP_SIZE = 50.0;
   const WORLD_SIZE = MAP_SIZE * 100.0;
-  const Z_POS = -10.0;
 
   var gXPos = 0.0;
   var gYPos = -MAP_SIZE;
+  var gZPos = -10.0;
 
   var gTextureFilter = 2;
 
@@ -296,7 +296,7 @@ body {
     mat4.identity(gMVMatrix);
 
     mat4.rotate(gMVMatrix, degToRad(25.0), [1, 0, 0]);
-    mat4.translate(gMVMatrix, [gXPos, Z_POS, gYPos]);
+    mat4.translate(gMVMatrix, [gXPos, gZPos, gYPos]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
     gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
@@ -344,7 +344,10 @@ body {
     e.preventDefault();
     var touches = e.changedTouches;
     for (var i = 0; i < touches.length; i++) {
-      gTouches.push(touches[i]);
+      var touch = touches[i];
+      touch.lastScreenX = touch.screenX;
+      touch.lastScreenY = touch.screenY;
+      gTouches.push(touch);
     }
   }
 
@@ -371,9 +374,31 @@ body {
     for (var i = 0; i < touches.length; i++) {
       var touch = touches[i];
       var touchId = getTouchIdByIdentifier(touches[i].identifier);
-      gXPos += MAP_SIZE * (touch.screenX - gTouches[touchId].screenX) / 1000.0;
-      gYPos += MAP_SIZE * (touch.screenY - gTouches[touchId].screenY) / 1000.0;
+      touch.lastScreenX = gTouches[touchId].screenX;
+      touch.lastScreenY = gTouches[touchId].screenY;
       gTouches[touchId] = touch;
+    }
+
+    if (gTouches.length == 1) {
+      var touch = gTouches[0];
+      gXPos += MAP_SIZE * (touch.screenX - touch.lastScreenX) / 1000.0;
+      gYPos += MAP_SIZE * (touch.screenY - touch.lastScreenY) / 1000.0;
+    } else if (gTouches.length >= 2) {
+      var firstTouch = gTouches[0];
+      var lastTouch = gTouches[gTouches.length - 1];
+
+      var lastSpan =
+        Math.sqrt(firstTouch.lastScreenX*firstTouch.lastScreenX +
+                  lastTouch.lastScreenY*lastTouch.lastScreenY);
+      var curSpan =
+        Math.sqrt(firstTouch.screenX*firstTouch.screenX +
+                  lastTouch.screenY*lastTouch.screenY);
+
+      console.log('curSpan: ' + curSpan);
+      console.log('lastSpan: ' + lastSpan);
+
+      gYPos += MAP_SIZE * (curSpan - lastSpan) / 100.0;
+      gZPos += MAP_SIZE * (curSpan - lastSpan) / 100.0;
     }
   }
 
