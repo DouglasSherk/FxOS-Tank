@@ -345,8 +345,25 @@ body {
     gLastTime = timeNow;
   }
 
+  function snapCameraToScene() {
+    function clamp(t, min, max) {
+      if (t < min) {
+        t = min;
+      } else if (t > max) {
+        t = max;
+      }
+
+      return t;
+    }
+
+    gXPos = clamp(gXPos, -MAP_SIZE, MAP_SIZE);
+    gYPos = clamp(gYPos, -MAP_SIZE, MAP_SIZE);
+    gZPos = clamp(gZPos, -MAP_SIZE, MAP_SIZE);
+  }
+
   function tick() {
     requestAnimFrame(tick);
+    snapCameraToScene();
     handleKeys();
     drawScene();
     animate();
