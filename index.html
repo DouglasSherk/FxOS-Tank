@@ -58,7 +58,9 @@ body {
 
   var gXPos = 0.0;
   var gYPos = -MAP_SIZE;
-  var gZPos = -10.0;
+  var gZPos = 0.0;
+
+  var gCameraT = 0.25;
 
   var gXSpeed = 0.0;
   var gYSpeed = 0.0;
@@ -300,8 +302,12 @@ body {
 
     mat4.identity(gMVMatrix);
 
-    mat4.rotate(gMVMatrix, degToRad(25.0), [1, 0, 0]);
-    mat4.translate(gMVMatrix, [gXPos, gZPos, gYPos]);
+    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 10.0 + 25.0;
+    var yPos = (2.0 - gCameraT) * -10.0;
+    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -10.0;
+
+    mat4.rotate(gMVMatrix, degToRad(cameraRot), [1, 0, 0]);
+    mat4.translate(gMVMatrix, [gXPos, gZPos + yPos, gYPos + zPos]);
 
     gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
     gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
@@ -359,6 +365,7 @@ body {
     gXPos = clamp(gXPos, -MAP_SIZE, MAP_SIZE);
     gYPos = clamp(gYPos, -MAP_SIZE, MAP_SIZE);
     gZPos = clamp(gZPos, -MAP_SIZE, MAP_SIZE);
+    gCameraT = clamp(gCameraT, 0.0, 1.0);
   }
 
   function tick() {
@@ -437,8 +444,7 @@ body {
       console.log('curSpan: ' + curSpan);
       console.log('lastSpan: ' + lastSpan);
 
-      gYPos += MAP_SIZE * (curSpan - lastSpan) / 100.0;
-      gZPos += MAP_SIZE * (curSpan - lastSpan) / 100.0;
+      gCameraT += (curSpan - lastSpan) / 100.0;
     }
   }
 
