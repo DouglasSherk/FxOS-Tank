@@ -65,8 +65,6 @@ body {
   var gXSpeed = 0.0;
   var gYSpeed = 0.0;
 
-  var gTextureFilter = 2;
-
   var gPressedKeys = {};
 
   var gShaderProgram;
@@ -75,7 +73,12 @@ body {
   var gGrassVertexTextureCoordBuffer;
   var gGrassVertexIndexBuffer;
 
+  var gSkyboxVertexPositionBuffer;
+  var gSkyboxVertexTextureCoordBuffer;
+  var gSkyboxVertexIndexBuffer;
+
   var gGrassTexture;
+  var gSkyboxTexture;
 
   var gMVMatrix = mat4.create();
   var gMVMatrixStack = [];
@@ -170,18 +173,19 @@ body {
     gl.bindTexture(gl.TEXTURE_2D, null);
   }
 
-  function initTexture() {
-    var grassImage = new Image();
+  function initTexture(path) {
+    var img = new Image();
 
     var texture = gl.createTexture();
-    texture.image = grassImage;
-    gGrassTexture = texture;
+    texture.image = img;
 
-    grassImage.onload = function () {
-      handleLoadedTexture(gGrassTexture);
+    img.onload = function () {
+      handleLoadedTexture(texture);
     }
 
-    grassImage.src = "grass.gif";
+    img.src = path;
+
+    return texture;
   }
 
   function mvPushMatrix() {
@@ -208,13 +212,6 @@ body {
 
   function handleKeyDown(event) {
     gPressedKeys[event.keyCode] = true;
-
-    if (String.fromCharCode(event.keyCode) == "F") {
-      gTextureFilter += 1;
-      if (gTextureFilter == 3) {
-        gTextureFilter = 0;
-      }
-    }
   }
 
   function handleKeyUp(event) {
@@ -248,7 +245,109 @@ body {
     }
   }
 
-  function initBuffers() {
+  function initSkyboxBuffers() {
+    skyboxVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexPositionBuffer);
+    vertices = [
+      // Front face
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Back face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+
+      // Top face
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+
+      // Bottom face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Right face
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Left face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    skyboxVertexPositionBuffer.itemSize = 3;
+    skyboxVertexPositionBuffer.numItems = 24;
+
+    skyboxVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexTextureCoordBuffer);
+    var textureCoords = [
+      // Front face
+      1.00, 0.50,
+      0.75, 0.50,
+      0.75, 0.75,
+      1.00, 0.75,
+
+      // Back face
+      0.25, 0.50,
+      0.25, 0.75,
+      0.50, 0.75,
+      0.50, 0.50,
+
+      // Top face
+      0.25, 0.75,
+      0.25, 1.00,
+      0.50, 1.00,
+      0.50, 0.75,
+
+      // Bottom face
+      0.25, 0.50,
+      0.50, 0.50,
+      0.50, 0.25,
+      0.25, 0.25,
+
+      // Right face
+      0.50, 0.50,
+      0.50, 0.75,
+      0.75, 0.75,
+      0.75, 0.50,
+
+      // Left face
+      0.25, 0.50,
+      0.00, 0.50,
+      0.00, 0.75,
+      0.25, 0.75,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+    skyboxVertexTextureCoordBuffer.itemSize = 2;
+    skyboxVertexTextureCoordBuffer.numItems = 24;
+
+    skyboxVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyboxVertexIndexBuffer);
+    var skyboxVertexIndices = [
+      0, 1, 2,      0, 2, 3,    // Front face
+      4, 5, 6,      4, 6, 7,    // Back face
+      8, 9, 10,     8, 10, 11,  // Top face
+      12, 13, 14,   12, 14, 15, // Bottom face
+      16, 17, 18,   16, 18, 19, // Right face
+      20, 21, 22,   20, 22, 23  // Left face
+    ]
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(skyboxVertexIndices), gl.STATIC_DRAW);
+    skyboxVertexIndexBuffer.itemSize = 1;
+    skyboxVertexIndexBuffer.numItems = 36;
+  }
+
+  function initGrassBuffers() {
     gGrassVertexPositionBuffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
     vertices = [
@@ -313,6 +412,11 @@ body {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
     setMatrixUniforms();
     gl.drawElements(gl.TRIANGLES, gGrassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+  }
+
+  function initBuffers() {
+    initSkyboxBuffers();
+    initGrassBuffers();
   }
 
   function animate() {
@@ -465,7 +569,9 @@ body {
     initGL(canvas);
     initShaders();
     initBuffers();
-    initTexture();
+
+    gGrassTexture = initTexture('grass.gif');
+    gSkyboxTexture = initTexture('skybox.gif');
 
     gl.clearColor(0.0, 0.0, 0.0, 1.0);
     gl.enable(gl.DEPTH_TEST);
