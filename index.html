@@ -246,8 +246,8 @@ body {
   }
 
   function initSkyboxBuffers() {
-    skyboxVertexPositionBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexPositionBuffer);
+    gSkyboxVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexPositionBuffer);
     vertices = [
       // Front face
       -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
@@ -286,11 +286,11 @@ body {
       -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
     ];
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
-    skyboxVertexPositionBuffer.itemSize = 3;
-    skyboxVertexPositionBuffer.numItems = 24;
+    gSkyboxVertexPositionBuffer.itemSize = 3;
+    gSkyboxVertexPositionBuffer.numItems = 24;
 
-    skyboxVertexTextureCoordBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, skyboxVertexTextureCoordBuffer);
+    gSkyboxVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexTextureCoordBuffer);
     var textureCoords = [
       // Front face
       1.00, 0.50,
@@ -329,11 +329,11 @@ body {
       0.25, 0.75,
     ];
     gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
-    skyboxVertexTextureCoordBuffer.itemSize = 2;
-    skyboxVertexTextureCoordBuffer.numItems = 24;
+    gSkyboxVertexTextureCoordBuffer.itemSize = 2;
+    gSkyboxVertexTextureCoordBuffer.numItems = 24;
 
-    skyboxVertexIndexBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, skyboxVertexIndexBuffer);
+    gSkyboxVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gSkyboxVertexIndexBuffer);
     var skyboxVertexIndices = [
       0, 1, 2,      0, 2, 3,    // Front face
       4, 5, 6,      4, 6, 7,    // Back face
@@ -343,8 +343,8 @@ body {
       20, 21, 22,   20, 22, 23  // Left face
     ]
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(skyboxVertexIndices), gl.STATIC_DRAW);
-    skyboxVertexIndexBuffer.itemSize = 1;
-    skyboxVertexIndexBuffer.numItems = 36;
+    gSkyboxVertexIndexBuffer.itemSize = 1;
+    gSkyboxVertexIndexBuffer.numItems = 36;
   }
 
   function initGrassBuffers() {
@@ -384,21 +384,12 @@ body {
     gGrassVertexIndexBuffer.numItems = 6;
   }
 
-  function drawScene() {
-    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
-    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  function initBuffers() {
+    initSkyboxBuffers();
+    initGrassBuffers();
+  }
 
-    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 10000.0, gPMatrix);
-
-    mat4.identity(gMVMatrix);
-
-    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 15.0 + 20.0;
-    var yPos = (2.0 - gCameraT) * -20.0;
-    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -20.0;
-
-    mat4.rotate(gMVMatrix, degToRad(cameraRot), [1, 0, 0]);
-    mat4.translate(gMVMatrix, [gXPos, gZPos + yPos, gYPos + zPos]);
-
+  function drawGrass() {
     gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
     gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
@@ -414,9 +405,45 @@ body {
     gl.drawElements(gl.TRIANGLES, gGrassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
   }
 
-  function initBuffers() {
-    initSkyboxBuffers();
-    initGrassBuffers();
+  function drawSkybox() {
+    gl.useProgram(gShaderProgram);
+
+    gl.depthMask(false);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexPositionBuffer);
+    gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gSkyboxVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gSkyboxVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, gSkyboxTexture);
+    gl.uniform1i(gShaderProgram.samplerUniform, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gSkyboxVertexIndexBuffer);
+    setMatrixUniforms(gShaderProgram);
+    gl.drawElements(gl.TRIANGLES, gSkyboxVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+    gl.depthMask(true);
+  }
+
+  function drawScene() {
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 10000.0, gPMatrix);
+
+    mat4.identity(gMVMatrix);
+
+    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 15.0 + 20.0;
+    var yPos = (2.0 - gCameraT) * -20.0;
+    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -20.0;
+
+    mat4.rotate(gMVMatrix, degToRad(cameraRot), [1, 0, 0]);
+    mat4.translate(gMVMatrix, [gXPos, gZPos + yPos, gYPos + zPos]);
+
+    drawSkybox();
+    drawGrass();
   }
 
   function animate() {
