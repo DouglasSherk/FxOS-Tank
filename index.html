@@ -52,15 +52,15 @@ body {
   var gl;
 
   const MAP_SIZE = 50.0;
-  const WORLD_SIZE = MAP_SIZE * 100.0;
+  const SKYBOX_SIZE = MAP_SIZE * 100.0;
 
   const FLING_FRICTION = 250.0;
 
   var gXPos = 0.0;
-  var gYPos = -MAP_SIZE;
+  var gYPos = -0.9*MAP_SIZE;
   var gZPos = 0.0;
 
-  var gCameraT = 0.25;
+  var gCameraT = 0.15;
 
   var gXSpeed = 0.0;
   var gYSpeed = 0.0;
@@ -75,7 +75,7 @@ body {
   var gGrassVertexTextureCoordBuffer;
   var gGrassVertexIndexBuffer;
 
-  var gGrassTextures = Array();
+  var gGrassTexture;
 
   var gMVMatrix = mat4.create();
   var gMVMatrixStack = [];
@@ -158,21 +158,11 @@ body {
     gShaderProgram.samplerUniform = gl.getUniformLocation(gShaderProgram, "uSampler");
   }
 
-  function handleLoadedTexture(textures) {
+  function handleLoadedTexture(texture) {
     gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
 
-    gl.bindTexture(gl.TEXTURE_2D, textures[0]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[0].image);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[1]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[1].image);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-
-    gl.bindTexture(gl.TEXTURE_2D, textures[2]);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, textures[2].image);
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
     gl.generateMipmap(gl.TEXTURE_2D);
@@ -183,15 +173,14 @@ body {
   function initTexture() {
     var grassImage = new Image();
 
-    for (var i=0; i < 3; i++) {
-      var texture = gl.createTexture();
-      texture.image = grassImage;
-      gGrassTextures.push(texture);
-    }
+    var texture = gl.createTexture();
+    texture.image = grassImage;
+    gGrassTexture = texture;
 
     grassImage.onload = function () {
-      handleLoadedTexture(gGrassTextures)
+      handleLoadedTexture(gGrassTexture);
     }
+
     grassImage.src = "grass.gif";
   }
 
@@ -235,25 +224,27 @@ body {
   function handleKeys() {
     if (gPressedKeys[33]) {
       // Page Up
+      gCameraT += 0.02;
     }
     if (gPressedKeys[34]) {
       // Page Down
+      gCameraT -= 0.02;
     }
     if (gPressedKeys[37]) {
       // Left cursor key
-      ySpeed -= 1;
+      gXPos += 1;
     }
     if (gPressedKeys[39]) {
       // Right cursor key
-      ySpeed += 1;
+      gXPos -= 1;
     }
     if (gPressedKeys[38]) {
       // Up cursor key
-      xSpeed -= 1;
+      gYPos += 1;
     }
     if (gPressedKeys[40]) {
       // Down cursor key
-      xSpeed += 1;
+      gYPos -= 1;
     }
   }
 
@@ -302,9 +293,9 @@ body {
 
     mat4.identity(gMVMatrix);
 
-    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 10.0 + 25.0;
-    var yPos = (2.0 - gCameraT) * -10.0;
-    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -10.0;
+    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 15.0 + 20.0;
+    var yPos = (2.0 - gCameraT) * -20.0;
+    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -20.0;
 
     mat4.rotate(gMVMatrix, degToRad(cameraRot), [1, 0, 0]);
     mat4.translate(gMVMatrix, [gXPos, gZPos + yPos, gYPos + zPos]);
@@ -316,7 +307,7 @@ body {
     gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gGrassVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, gGrassTextures[gTextureFilter]);
+    gl.bindTexture(gl.TEXTURE_2D, gGrassTexture);
     gl.uniform1i(gShaderProgram.samplerUniform, 0);
 
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
@@ -370,8 +361,8 @@ body {
 
   function tick() {
     requestAnimFrame(tick);
-    snapCameraToScene();
     handleKeys();
+    snapCameraToScene();
     drawScene();
     animate();
   }
