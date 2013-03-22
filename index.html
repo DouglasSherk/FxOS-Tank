@@ -1,0 +1,622 @@
+<html>
+
+<head>
+<title>Firefox OS - Tank Game</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+<meta name="viewport" content="width=device-width, height=device-height, initial-scale=1, maximum-scale=1">
+
+<style type="text/css">
+body {
+  overflow: hidden;
+}
+
+#tank {
+  position: absolute;
+  top: 0;
+  left: 0;
+}
+</style>
+
+<script type="text/javascript" src="glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="webgl-utils.js"></script>
+
+<script id="shader-fs" type="x-shader/x-fragment">
+    precision mediump float;
+
+    varying vec2 vTextureCoord;
+
+    uniform sampler2D uSampler;
+
+    void main(void) {
+        gl_FragColor = texture2D(uSampler, vec2(vTextureCoord.s, vTextureCoord.t));
+    }
+</script>
+
+<script id="shader-vs" type="x-shader/x-vertex">
+    attribute vec3 aVertexPosition;
+    attribute vec2 aTextureCoord;
+
+    uniform mat4 uMVMatrix;
+    uniform mat4 uPMatrix;
+
+    varying vec2 vTextureCoord;
+
+    void main(void) {
+        gl_Position = uPMatrix * uMVMatrix * vec4(aVertexPosition, 1.0);
+        vTextureCoord = aTextureCoord;
+    }
+</script>
+
+<script type="text/javascript">
+
+  var gl;
+
+  const MAP_SIZE = 50.0;
+  const SKYBOX_SIZE = MAP_SIZE * 100.0;
+
+  const FLING_FRICTION = 250.0;
+
+  var gXPos = 0.0;
+  var gYPos = -0.9*MAP_SIZE;
+  var gZPos = 0.0;
+
+  var gCameraT = 0.15;
+
+  var gXSpeed = 0.0;
+  var gYSpeed = 0.0;
+
+  var gPressedKeys = {};
+
+  var gShaderProgram;
+
+  var gGrassVertexPositionBuffer;
+  var gGrassVertexTextureCoordBuffer;
+  var gGrassVertexIndexBuffer;
+
+  var gSkyboxVertexPositionBuffer;
+  var gSkyboxVertexTextureCoordBuffer;
+  var gSkyboxVertexIndexBuffer;
+
+  var gGrassTexture;
+  var gSkyboxTexture;
+
+  var gMVMatrix = mat4.create();
+  var gMVMatrixStack = [];
+  var gPMatrix = mat4.create();
+
+  var gLastTime = 0;
+
+  var gTouches = [];
+
+  function initGL(canvas) {
+    try {
+      gl = canvas.getContext("experimental-webgl");
+      gl.viewportWidth = canvas.width;
+      gl.viewportHeight = canvas.height;
+    } catch (e) {
+    }
+    if (!gl) {
+      alert("Could not initialise WebGL, sorry :-(");
+    }
+  }
+
+  function getShader(gl, id) {
+    var shaderScript = document.getElementById(id);
+    if (!shaderScript) {
+      return null;
+    }
+
+    var str = "";
+    var k = shaderScript.firstChild;
+    while (k) {
+      if (k.nodeType == 3) {
+        str += k.textContent;
+      }
+      k = k.nextSibling;
+    }
+
+    var shader;
+    if (shaderScript.type == "x-shader/x-fragment") {
+      shader = gl.createShader(gl.FRAGMENT_SHADER);
+    } else if (shaderScript.type == "x-shader/x-vertex") {
+      shader = gl.createShader(gl.VERTEX_SHADER);
+    } else {
+      return null;
+    }
+
+    gl.shaderSource(shader, str);
+    gl.compileShader(shader);
+
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      alert(gl.getShaderInfoLog(shader));
+      return null;
+    }
+
+    return shader;
+  }
+
+  function initShaders() {
+    var fragmentShader = getShader(gl, "shader-fs");
+    var vertexShader = getShader(gl, "shader-vs");
+
+    gShaderProgram = gl.createProgram();
+    gl.attachShader(gShaderProgram, vertexShader);
+    gl.attachShader(gShaderProgram, fragmentShader);
+    gl.linkProgram(gShaderProgram);
+
+    if (!gl.getProgramParameter(gShaderProgram, gl.LINK_STATUS)) {
+      alert("Could not initialise shaders");
+    }
+
+    gl.useProgram(gShaderProgram);
+
+    gShaderProgram.vertexPositionAttribute = gl.getAttribLocation(gShaderProgram, "aVertexPosition");
+    gl.enableVertexAttribArray(gShaderProgram.vertexPositionAttribute);
+
+    gShaderProgram.textureCoordAttribute = gl.getAttribLocation(gShaderProgram, "aTextureCoord");
+    gl.enableVertexAttribArray(gShaderProgram.textureCoordAttribute);
+
+    gShaderProgram.pMatrixUniform = gl.getUniformLocation(gShaderProgram, "uPMatrix");
+    gShaderProgram.mvMatrixUniform = gl.getUniformLocation(gShaderProgram, "uMVMatrix");
+    gShaderProgram.samplerUniform = gl.getUniformLocation(gShaderProgram, "uSampler");
+  }
+
+  function handleLoadedTexture(texture) {
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+
+    gl.bindTexture(gl.TEXTURE_2D, texture);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+    gl.generateMipmap(gl.TEXTURE_2D);
+
+    gl.bindTexture(gl.TEXTURE_2D, null);
+  }
+
+  function initTexture(path) {
+    var img = new Image();
+
+    var texture = gl.createTexture();
+    texture.image = img;
+
+    img.onload = function () {
+      handleLoadedTexture(texture);
+    }
+
+    img.src = path;
+
+    return texture;
+  }
+
+  function mvPushMatrix() {
+    var copy = mat4.create();
+    mat4.set(gMVMatrix, copy);
+    gMVMatrixStack.push(copy);
+  }
+
+  function mvPopMatrix() {
+    if (gMVMatrixStack.length == 0) {
+      throw "Invalid popMatrix!";
+    }
+    gMVMatrix = gMVMatrixStack.pop();
+  }
+
+  function setMatrixUniforms() {
+    gl.uniformMatrix4fv(gShaderProgram.pMatrixUniform, false, gPMatrix);
+    gl.uniformMatrix4fv(gShaderProgram.mvMatrixUniform, false, gMVMatrix);
+  }
+
+  function degToRad(degrees) {
+    return degrees * Math.PI / 180;
+  }
+
+  function handleKeyDown(event) {
+    gPressedKeys[event.keyCode] = true;
+  }
+
+  function handleKeyUp(event) {
+    gPressedKeys[event.keyCode] = false;
+  }
+
+  function handleKeys() {
+    if (gPressedKeys[33]) {
+      // Page Up
+      gCameraT += 0.02;
+    }
+    if (gPressedKeys[34]) {
+      // Page Down
+      gCameraT -= 0.02;
+    }
+    if (gPressedKeys[37]) {
+      // Left cursor key
+      gXPos += 1;
+    }
+    if (gPressedKeys[39]) {
+      // Right cursor key
+      gXPos -= 1;
+    }
+    if (gPressedKeys[38]) {
+      // Up cursor key
+      gYPos += 1;
+    }
+    if (gPressedKeys[40]) {
+      // Down cursor key
+      gYPos -= 1;
+    }
+  }
+
+  function initSkyboxBuffers() {
+    gSkyboxVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexPositionBuffer);
+    vertices = [
+      // Front face
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Back face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+
+      // Top face
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+
+      // Bottom face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Right face
+       SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+       SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+       SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+
+      // Left face
+      -SKYBOX_SIZE, -SKYBOX_SIZE, -SKYBOX_SIZE,
+      -SKYBOX_SIZE, -SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE,  SKYBOX_SIZE,
+      -SKYBOX_SIZE,  SKYBOX_SIZE, -SKYBOX_SIZE,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gSkyboxVertexPositionBuffer.itemSize = 3;
+    gSkyboxVertexPositionBuffer.numItems = 24;
+
+    gSkyboxVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexTextureCoordBuffer);
+    var textureCoords = [
+      // Front face
+      1.00, 0.50,
+      0.75, 0.50,
+      0.75, 0.75,
+      1.00, 0.75,
+
+      // Back face
+      0.25, 0.50,
+      0.25, 0.75,
+      0.50, 0.75,
+      0.50, 0.50,
+
+      // Top face
+      0.25, 0.75,
+      0.25, 1.00,
+      0.50, 1.00,
+      0.50, 0.75,
+
+      // Bottom face
+      0.25, 0.50,
+      0.50, 0.50,
+      0.50, 0.25,
+      0.25, 0.25,
+
+      // Right face
+      0.50, 0.50,
+      0.50, 0.75,
+      0.75, 0.75,
+      0.75, 0.50,
+
+      // Left face
+      0.25, 0.50,
+      0.00, 0.50,
+      0.00, 0.75,
+      0.25, 0.75,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+    gSkyboxVertexTextureCoordBuffer.itemSize = 2;
+    gSkyboxVertexTextureCoordBuffer.numItems = 24;
+
+    gSkyboxVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gSkyboxVertexIndexBuffer);
+    var skyboxVertexIndices = [
+      0, 1, 2,      0, 2, 3,    // Front face
+      4, 5, 6,      4, 6, 7,    // Back face
+      8, 9, 10,     8, 10, 11,  // Top face
+      12, 13, 14,   12, 14, 15, // Bottom face
+      16, 17, 18,   16, 18, 19, // Right face
+      20, 21, 22,   20, 22, 23  // Left face
+    ]
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(skyboxVertexIndices), gl.STATIC_DRAW);
+    gSkyboxVertexIndexBuffer.itemSize = 1;
+    gSkyboxVertexIndexBuffer.numItems = 36;
+  }
+
+  function initGrassBuffers() {
+    gGrassVertexPositionBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
+    vertices = [
+      // Bottom face
+      -MAP_SIZE, 0.0, -MAP_SIZE,
+      MAP_SIZE, 0.0, -MAP_SIZE,
+      MAP_SIZE, 0.0,  MAP_SIZE,
+      -MAP_SIZE, 0.0,  MAP_SIZE,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(vertices), gl.STATIC_DRAW);
+    gGrassVertexPositionBuffer.itemSize = 3;
+    gGrassVertexPositionBuffer.numItems = 4;
+
+    gGrassVertexTextureCoordBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexTextureCoordBuffer);
+    var textureCoords = [
+      // Bottom face
+      1.0, 1.0,
+      0.0, 1.0,
+      0.0, 0.0,
+      1.0, 0.0,
+    ];
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array(textureCoords), gl.STATIC_DRAW);
+    gGrassVertexTextureCoordBuffer.itemSize = 2;
+    gGrassVertexTextureCoordBuffer.numItems = 4;
+
+    gGrassVertexIndexBuffer = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
+    var gGrassVertexIndices = [
+      0, 1, 2,      0, 2, 3,    // Bottom face
+    ];
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, new Uint16Array(gGrassVertexIndices), gl.STATIC_DRAW);
+    gGrassVertexIndexBuffer.itemSize = 1;
+    gGrassVertexIndexBuffer.numItems = 6;
+  }
+
+  function initBuffers() {
+    initSkyboxBuffers();
+    initGrassBuffers();
+  }
+
+  function drawGrass() {
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexPositionBuffer);
+    gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gGrassVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gGrassVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gGrassVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, gGrassTexture);
+    gl.uniform1i(gShaderProgram.samplerUniform, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gGrassVertexIndexBuffer);
+    setMatrixUniforms();
+    gl.drawElements(gl.TRIANGLES, gGrassVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+  }
+
+  function drawSkybox() {
+    gl.useProgram(gShaderProgram);
+
+    gl.depthMask(false);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexPositionBuffer);
+    gl.vertexAttribPointer(gShaderProgram.vertexPositionAttribute, gSkyboxVertexPositionBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.bindBuffer(gl.ARRAY_BUFFER, gSkyboxVertexTextureCoordBuffer);
+    gl.vertexAttribPointer(gShaderProgram.textureCoordAttribute, gSkyboxVertexTextureCoordBuffer.itemSize, gl.FLOAT, false, 0, 0);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, gSkyboxTexture);
+    gl.uniform1i(gShaderProgram.samplerUniform, 0);
+
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, gSkyboxVertexIndexBuffer);
+    setMatrixUniforms(gShaderProgram);
+    gl.drawElements(gl.TRIANGLES, gSkyboxVertexIndexBuffer.numItems, gl.UNSIGNED_SHORT, 0);
+
+    gl.depthMask(true);
+  }
+
+  function drawScene() {
+    gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+    gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+    mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 10000.0, gPMatrix);
+
+    mat4.identity(gMVMatrix);
+
+    var cameraRot = Math.pow(1.0 - gCameraT, 2.0) * 15.0 + 20.0;
+    var yPos = (2.0 - gCameraT) * -20.0;
+    var zPos = (Math.pow(1.0 - gCameraT, 2.0) + 1.0) * -20.0;
+
+    mat4.rotate(gMVMatrix, degToRad(cameraRot), [1, 0, 0]);
+    mat4.translate(gMVMatrix, [gXPos, gZPos + yPos, gYPos + zPos]);
+
+    drawSkybox();
+    drawGrass();
+  }
+
+  function animate() {
+    var timeNow = new Date().getTime();
+    if (gLastTime != 0) {
+      var elapsed = timeNow - gLastTime;
+
+      if (gTouches.length == 0) {
+        gXPos += MAP_SIZE * (gXSpeed * elapsed) / 1000.0;
+        gYPos += MAP_SIZE * (gYSpeed * elapsed) / 1000.0;
+
+        if (elapsed > 0) {
+          if (Math.abs(gXSpeed) > 0.1) {
+            gXSpeed += (gXSpeed > 0.0 ? -1 : 1) * elapsed / FLING_FRICTION;
+          } else {
+            gXSpeed = 0.0;
+          }
+
+          if (Math.abs(gYSpeed) > 0.1) {
+            gYSpeed += (gYSpeed > 0.0 ? -1 : 1) * elapsed / FLING_FRICTION;
+          } else {
+            gYSpeed = 0.0;
+          }
+        }
+      }
+    }
+    gLastTime = timeNow;
+  }
+
+  function snapCameraToScene() {
+    function clamp(t, min, max) {
+      if (t < min) {
+        t = min;
+      } else if (t > max) {
+        t = max;
+      }
+
+      return t;
+    }
+
+    gXPos = clamp(gXPos, -MAP_SIZE, MAP_SIZE);
+    gYPos = clamp(gYPos, -MAP_SIZE, MAP_SIZE);
+    gZPos = clamp(gZPos, -MAP_SIZE, MAP_SIZE);
+    gCameraT = clamp(gCameraT, 0.0, 1.0);
+  }
+
+  function tick() {
+    requestAnimFrame(tick);
+    handleKeys();
+    snapCameraToScene();
+    drawScene();
+    animate();
+  }
+
+  function getTouchIdByIdentifier(id) {
+    for (var i = 0; i < gTouches.length; i++) {
+      if (gTouches[i].identifier == id) {
+        return i;
+      }
+    }
+    return -1;
+  }
+
+  function handleStart(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      var touch = touches[i];
+      touch.lastScreenX = touch.screenX;
+      touch.lastScreenY = touch.screenY;
+      gTouches.push(touch);
+    }
+  }
+
+  function handleEnd(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      var touchId = getTouchIdByIdentifier(touches[i].identifier);
+      gTouches.splice(touchId, 1);
+    }
+  }
+
+  function handleCancel(e) {
+    handleEnd(e);
+  }
+
+  function handleLeave(e) {
+    handleEnd(e);
+  }
+
+  function handleMove(e) {
+    e.preventDefault();
+    var touches = e.changedTouches;
+    for (var i = 0; i < touches.length; i++) {
+      var touch = touches[i];
+      var touchId = getTouchIdByIdentifier(touch.identifier);
+      touch.lastScreenX = gTouches[touchId].screenX;
+      touch.lastScreenY = gTouches[touchId].screenY;
+      gTouches[touchId] = touch;
+    }
+
+    if (gTouches.length == 1) {
+      var touch = gTouches[0];
+      gXSpeed = MAP_SIZE * (touch.screenX - touch.lastScreenX) / 1000.0;
+      gYSpeed = MAP_SIZE * (touch.screenY - touch.lastScreenY) / 1000.0;
+      gXPos += gXSpeed;
+      gYPos += gYSpeed;
+    } else if (gTouches.length >= 2) {
+      var firstTouch = gTouches[0];
+      var lastTouch = gTouches[gTouches.length - 1];
+
+      var lastSpan =
+        Math.sqrt(firstTouch.lastScreenX*firstTouch.lastScreenX +
+                  lastTouch.lastScreenY*lastTouch.lastScreenY);
+      var curSpan =
+        Math.sqrt(firstTouch.screenX*firstTouch.screenX +
+                  lastTouch.screenY*lastTouch.screenY);
+
+      console.log('curSpan: ' + curSpan);
+      console.log('lastSpan: ' + lastSpan);
+
+      gCameraT += (curSpan - lastSpan) / 100.0;
+    }
+  }
+
+  function addEventListeners() {
+    var canvas = document.getElementById("tank");
+    canvas.addEventListener("touchstart", handleStart, false);
+    canvas.addEventListener("touchend", handleEnd, false);
+    canvas.addEventListener("touchcancel", handleCancel, false);
+    canvas.addEventListener("touchleave", handleLeave, false);
+    canvas.addEventListener("touchmove", handleMove, false);
+  }
+
+  function webglResize() {
+    var canvas = document.getElementById("tank");
+    if (canvas.width < window.innerWidth) {
+      canvas.width = window.innerWidth;
+    }
+    if (canvas.height < window.innerHeight) {
+      canvas.height = window.innerHeight;
+    }
+  }
+
+  function webGLStart() {
+    webglResize();
+
+    var canvas = document.getElementById("tank");
+    initGL(canvas);
+    initShaders();
+    initBuffers();
+
+    gGrassTexture = initTexture('grass.gif');
+    gSkyboxTexture = initTexture('skybox.gif');
+
+    gl.clearColor(0.0, 0.0, 0.0, 1.0);
+    gl.enable(gl.DEPTH_TEST);
+
+    document.onkeydown = handleKeyDown;
+    document.onkeyup = handleKeyUp;
+
+    addEventListeners();
+
+    tick();
+  }
+
+</script>
+
+</head>
+
+<body onload="webGLStart();" onresize="webglResize();">
+  <canvas id="tank" style="border: none;" width="300" height="300"></canvas>
+</body>
+
+</html>
